@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>回滚 - CF 部署工具</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f5;color:#333;padding:15px;font-size:14px}
+header{background:linear-gradient(135deg,#007bff,#0056b3);color:white;padding:14px 16px;border-radius:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:17px}
+header a{color:white;text-decoration:none;background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:6px;font-size:12px}
+.card{background:white;padding:14px;border-radius:10px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+button{padding:10px 14px;border:none;border-radius:6px;font-size:13px;cursor:pointer;margin-bottom:8px}
+.btn-blue{background:#17a2b8;color:white}
+.btn-green{background:#28a745;color:white}
+.backup-row{padding:12px;background:#f8f9fa;border-radius:6px;margin-bottom:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.backup-name{font-family:Menlo,monospace;font-size:12px;flex:1;min-width:200px;word-break:break-all}
+.backup-meta{font-size:11px;color:#6c757d}
+.backup-actions button{padding:6px 10px;font-size:12px;margin-left:6px}
+pre{background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:6px;font-family:Menlo,monospace;font-size:11px;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+.msg{padding:10px;border-radius:6px;font-size:13px;margin-top:8px;display:none}
+.msg-ok{background:#d4edda;color:#155724}
+.msg-err{background:#f8d7da;color:#721c24}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;padding:20px}
+.modal.show{display:flex}
+.modal-content{background:white;padding:24px;border-radius:12px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto}
+.modal-content h3{font-size:16px;margin-bottom:16px}
+.modal-actions{display:flex;gap:10px;margin-top:16px}
+.modal-actions button{flex:1;padding:12px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+.modal-actions .btn-confirm{background:#28a745;color:white}
+.modal-actions .btn-cancel{background:#6c757d;color:white}
+</style>
+</head>
+<body>
+<header>
+  <h1>回滚到备份版本</h1>
+  <a href="/">返回主页</a>
+</header>
+
+<div class="card">
+  <button class="btn-blue" id="reload">刷新备份列表</button>
+  <div id="list">加载中...</div>
+</div>
+
+<div class="msg" id="msg"></div>
+
+<div class="modal" id="previewModal">
+  <div class="modal-content">
+    <h3 id="previewTitle">备份预览</h3>
+    <pre id="previewContent"></pre>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="previewClose">关闭</button>
+      <button class="btn-confirm" id="previewRestore">恢复此版本</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var currentPreviewName = '';
+
+function showMsg(t, ok){
+  var m = document.getElementById('msg');
+  m.textContent = t;
+  m.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
+  m.style.display = 'block';
+  setTimeout(function(){ m.style.display = 'none'; }, 3000);
+}
+
+function escapeHtml(s){
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function loadList(){
+  var list = document.getElementById('list');
+  list.innerHTML = '加载中...';
+  fetch('/api/worker-backups').then(function(r){ return r.json(); }).then(function(data){
+    if (!data.success) { list.innerHTML = '失败：' + (data.error || ''); return; }
+    list.innerHTML = '';
+    if (!data.backups.length) { list.innerHTML = '（暂无备份）'; return; }
+    data.backups.forEach(function(b){
+      var row = document.createElement('div');
+      row.className = 'backup-row';
+      var time = new Date(b.time).toLocaleString();
+      row.innerHTML = '<div style="flex:1;min-width:200px"><div class="backup-name">' + escapeHtml(b.name) + '</div><div class="backup-meta">' + b.size + ' 字节 · ' + time + '</div></div>' +
+        '<div class="backup-actions">' +
+        '<button class="btn-blue" data-name="' + escapeHtml(b.name) + '" data-action="preview">预览</button>' +
+        '<button class="btn-green" data-name="' + escapeHtml(b.name) + '" data-action="restore">回滚</button>' +
+        '</div>';
+      list.appendChild(row);
+    });
+    list.querySelectorAll('button').forEach(function(btn){
+      btn.onclick = function(){
+        var name = this.dataset.name;
+        var action = this.dataset.action;
+        if (action === 'preview') {
+          fetch('/api/worker-backup-content', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name }) })
+            .then(function(r){ return r.json(); }).then(function(d){
+              if (d.success) {
+                currentPreviewName = name;
+                document.getElementById('previewTitle').textContent = '备份：' + name;
+                document.getElementById('previewContent').textContent = d.content;
+                document.getElementById('previewModal').classList.add('show');
+              } else showMsg('读取失败：' + d.error, false);
+            });
+        } else if (action === 'restore') {
+          if (!confirm('确认回滚到 ' + name + ' ？当前内容会自动备份。')) return;
+          fetch('/api/worker-restore', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name }) })
+            .then(function(r){ return r.json(); }).then(function(d){
+              if (d.success) {
+                showMsg('回滚成功，请去主页或编辑器点「保存并部署」上传到 CF', true);
+              } else showMsg('回滚失败：' + d.error, false);
+            });
+        }
+      };
+    });
+  }).catch(function(e){ list.innerHTML = '请求失败：' + e.message; });
+}
+
+document.getElementById('reload').onclick = loadList;
+document.getElementById('previewClose').onclick = function(){
+  document.getElementById('previewModal').classList.remove('show');
+};
+document.getElementById('previewRestore').onclick = function(){
+  if (!currentPreviewName) return;
+  if (!confirm('确认恢复 ' + currentPreviewName + ' ？当前内容会自动备份。')) return;
+  fetch('/api/worker-restore', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: currentPreviewName }) })
+    .then(function(r){ return r.json(); }).then(function(d){
+      if (d.success) {
+        showMsg('恢复成功', true);
+        document.getElementById('previewModal').classList.remove('show');
+        loadList();
+      } else showMsg('恢复失败：' + d.error, false);
+    });
+};
+
+loadList();
+</script>
+</body>
+</html>

@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>编辑器 - CF 部署工具</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f5;color:#333;padding:15px;font-size:14px}
+header{background:linear-gradient(135deg,#007bff,#0056b3);color:white;padding:14px 16px;border-radius:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:17px}
+header a{color:white;text-decoration:none;background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:6px;font-size:12px}
+.card{background:white;padding:14px;border-radius:10px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+.toolbar-row{display:grid;gap:8px;margin-bottom:8px}
+.toolbar-row.row-4{grid-template-columns:repeat(4,1fr)}
+.toolbar-row.row-3{grid-template-columns:repeat(3,1fr)}
+.toolbar-row:last-child{margin-bottom:0}
+.toolbar-row button{padding:11px 4px;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;color:white;white-space:nowrap}
+.toolbar-row button:disabled{opacity:.5;cursor:not-allowed}
+.btn-green{background:#28a745}
+.btn-blue{background:#17a2b8}
+.btn-orange{background:#fd7e14}
+.btn-red{background:#dc3545}
+.btn-gray{background:#6c757d}
+.btn-purple{background:#6f42c1}
+.btn-indigo{background:#4c6ef5}
+textarea{width:100%;min-height:500px;padding:12px;border:2px solid #e9ecef;border-radius:8px;font-family:Menlo,Consolas,monospace;font-size:13px;line-height:1.7;background:#1e1e1e;color:#d4d4d4;resize:vertical}
+textarea:focus{outline:none;border-color:#667eea}
+.info{font-size:12px;color:#6c757d;margin-top:8px;padding:8px;background:#f8f9fa;border-radius:4px;word-break:break-all}
+.info.error{color:#721c24;background:#f8d7da}
+.info.ok{color:#155724;background:#d4edda}
+.msg{padding:10px 14px;border-radius:8px;font-size:13px;margin-top:10px;display:none}
+.msg-ok{background:#d4edda;color:#155724}
+.msg-err{background:#f8d7da;color:#721c24}
+h3{font-size:14px;margin-bottom:10px;color:#495057}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#f5f5f5;z-index:1000;flex-direction:column}
+.modal.show{display:flex}
+.modal-header{background:linear-gradient(135deg,#007bff,#0056b3);color:white;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.modal-header h3{color:white;font-size:16px;margin:0}
+.modal-header .close-btn{background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer}
+.modal-toolbar{background:white;padding:10px 12px;flex-shrink:0;border-bottom:1px solid #e9ecef}
+.modal-toolbar .toolbar-row{display:flex;gap:6px;margin-bottom:6px}
+.modal-toolbar .toolbar-row:last-child{margin-bottom:0}
+.modal-toolbar input{flex:1;width:100%;padding:10px 12px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;background:#f8f9fa}
+.modal-toolbar input:focus{outline:none;border-color:#667eea;background:white}
+.modal-toolbar button{flex:1;padding:10px 12px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;color:white}
+.modal-body{flex:1;padding:10px;overflow:hidden;display:flex;flex-direction:column}
+.modal-body textarea{width:100%;flex:1;min-height:0;height:100%;margin:0;padding:12px;border:none;border-radius:0;font-family:Menlo,Consolas,monospace;font-size:13px;line-height:1.7;background:#1e1e1e;color:#d4d4d4;resize:none}
+.dialog{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1100;align-items:center;justify-content:center;padding:20px}
+.dialog.show{display:flex}
+.dialog-content{background:white;padding:24px;border-radius:12px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto}
+.dialog-content h3{font-size:16px;margin-bottom:16px;color:#333}
+.dialog-actions{display:flex;gap:10px;margin-top:16px}
+.dialog-actions button{flex:1;padding:12px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+.dialog-actions .btn-confirm{background:#28a745;color:white}
+.dialog-actions .btn-cancel{background:#6c757d;color:white}
+.dialog-actions .btn-danger{background:#dc3545;color:white}
+pre.preview{background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:6px;max-height:400px;overflow:auto;font-size:11px;white-space:pre-wrap;word-break:break-all}
+pre.progress{background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:6px;max-height:400px;overflow-y:auto;font-size:12px;white-space:pre-wrap;word-break:break-all;min-height:100px;margin-top:10px}
+.backup-item{padding:10px;background:#f8f9fa;border-radius:6px;margin-bottom:6px;display:flex;flex-wrap:wrap;gap:6px;justify-content:space-between;align-items:center}
+.backup-info{flex:1;min-width:180px;font-size:12px;font-family:Menlo,monospace;word-break:break-all}
+.backup-meta{font-size:11px;color:#6c757d}
+.backup-actions{display:flex;gap:4px}
+.backup-actions button{padding:4px 8px;font-size:11px;border:none;border-radius:4px;cursor:pointer;color:white}
+</style>
+</head>
+<body>
+<header>
+  <h1>worker.js 编辑器</h1>
+  <a href="/">返回主页</a>
+</header>
+
+<div class="card">
+  <div class="toolbar-row row-4">
+    <button class="btn-blue" id="reload">重新加载</button>
+    <button class="btn-orange" id="editBtn">进入编辑</button>
+    <button class="btn-purple" id="backupBtn">手动备份</button>
+    <button class="btn-indigo" id="backupListBtn">备份列表</button>
+  </div>
+  <div class="toolbar-row row-3">
+    <button class="btn-blue" id="uploadOpenBtn">上传 worker.js</button>
+    <button class="btn-green" id="deployBtn">保存并部署</button>
+    <button class="btn-orange" id="checkBtn">只语法检查</button>
+  </div>
+  <div class="toolbar-row row-3">
+    <button class="btn-purple" id="kvReplaceBtn" style="grid-column: span 2;">🔧 KV 绑定名替换</button>
+    <button class="btn-blue" id="exportBtn">📥 导出</button>
+  </div>
+  <textarea id="editor" readonly placeholder="加载中..."></textarea>
+  <div class="info" id="info">加载中...</div>
+</div>
+
+<div class="msg" id="msg"></div>
+
+<input type="file" id="fileInput" accept=".js,.txt" style="display:none">
+
+<div class="modal" id="editModal">
+  <div class="modal-header">
+    <h3>编辑 worker.js</h3>
+    <button class="close-btn" id="editClose">关闭</button>
+  </div>
+  <div class="modal-toolbar">
+    <div class="toolbar-row">
+      <button class="btn-green" id="editSave">保存</button>
+      <button class="btn-gray" id="undoBtn" disabled>撤回</button>
+    </div>
+    <div class="toolbar-row">
+      <input id="findText" placeholder="查找内容">
+    </div>
+    <div class="toolbar-row">
+      <input id="replaceText" placeholder="替换为（可留空）">
+    </div>
+    <div class="toolbar-row">
+      <button class="btn-blue" id="findBtn">查找</button>
+      <button class="btn-orange" id="replaceOne">替换</button>
+      <button class="btn-red" id="replaceAll">全部替换</button>
+    </div>
+  </div>
+  <div class="modal-body">
+    <textarea id="modalEditor"></textarea>
+  </div>
+</div>
+
+<div class="dialog" id="dialog">
+  <div class="dialog-content">
+    <h3 id="dialogTitle">提示</h3>
+    <div id="dialogBody"></div>
+    <div class="dialog-actions" id="dialogActions"></div>
+  </div>
+</div>
+
+<div class="dialog" id="progressDialog">
+  <div class="dialog-content">
+    <h3 id="progressTitle">进度</h3>
+    <pre class="progress" id="progressOutput"></pre>
+    <div class="dialog-actions">
+      <button class="btn-cancel" id="progressClose" disabled>关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="dialog" id="uploadProgressDialog">
+  <div class="dialog-content">
+    <h3 id="uploadProgressTitle">上传中...</h3>
+    <div style="margin:20px 0">
+      <div style="background:#e9ecef;border-radius:10px;height:24px;overflow:hidden">
+        <div id="uploadProgressBar" style="background:linear-gradient(90deg,#28a745,#1e7e34);height:100%;width:0%;transition:width 0.3s ease;text-align:center;color:white;font-size:12px;line-height:24px;font-weight:600">0%</div>
+      </div>
+    </div>
+    <div id="uploadProgressText" style="text-align:center;font-size:13px;color:#6c757d;margin-bottom:10px">准备上传...</div>
+    <div class="dialog-actions">
+      <button class="btn-cancel" id="uploadProgressClose" disabled>关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var editor = document.getElementById('editor');
+var modalEditor = document.getElementById('modalEditor');
+var info = document.getElementById('info');
+
+function escapeHtml(s){
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function showToast(t, ok){
+  var m = document.getElementById('msg');
+  m.textContent = t;
+  m.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
+  m.style.display = 'block';
+  setTimeout(function(){ m.style.display = 'none'; }, 3000);
+}
+
+function setInfo(text, type){
+  info.textContent = text;
+  info.className = 'info' + (type ? ' ' + type : '');
+}
+
+function showDialog(title, bodyHtml, buttons){
+  document.getElementById('dialogTitle').textContent = title;
+  document.getElementById('dialogBody').innerHTML = bodyHtml;
+  var actions = document.getElementById('dialogActions');
+  actions.innerHTML = '';
+  (buttons || []).forEach(function(b){
+    var btn = document.createElement('button');
+    btn.className = b.className || 'btn-confirm';
+    btn.textContent = b.text;
+    btn.onclick = function(){
+      document.getElementById('dialog').classList.remove('show');
+      if (b.onClick) b.onClick();
+    };
+    actions.appendChild(btn);
+  });
+  document.getElementById('dialog').classList.add('show');
+}
+
+function showProgress(title){
+  document.getElementById('progressTitle').textContent = title;
+  document.getElementById('progressOutput').textContent = '';
+  document.getElementById('progressClose').disabled = true;
+  document.getElementById('progressDialog').classList.add('show');
+}
+function appendProgress(text){
+  var out = document.getElementById('progressOutput');
+  out.textContent += text;
+  out.scrollTop = out.scrollHeight;
+}
+function closeProgressEnabled(){
+  document.getElementById('progressClose').disabled = false;
+}
+document.getElementById('progressClose').onclick = function(){
+  document.getElementById('progressDialog').classList.remove('show');
+};
+
+function loadFile(){
+  setInfo('加载中...', '');
+  editor.value = '';
+  fetch('/api/worker-file').then(function(r){
+    if (r.status === 401) { location.href = '/'; return; }
+    return r.json();
+  }).then(function(data){
+    if (data && data.success) {
+      editor.value = data.content;
+      setInfo('已加载 ' + data.content.split('\n').length + ' 行，' + data.content.length + ' 字符，格式：' + (data.scriptFormat || 'es-module'), 'ok');
+    } else {
+      editor.value = '';
+      setInfo('加载失败：' + (data && data.error || '未知错误'), 'error');
+      showToast('加载失败：' + (data && data.error || '未知错误'), false);
+    }
+  }).catch(function(e){
+    setInfo('请求失败：' + e.message, 'error');
+    showToast('请求失败：' + e.message, false);
+  });
+}
+
+document.getElementById('reload').onclick = loadFile;
+
+var _lastPushTime = 0;
+var _pendingValue = null;
+var _pushTimer = null;
+
+function pushModalUndo(force){
+  if (!modalEditor._undoStack) modalEditor._undoStack = [];
+  var now = Date.now();
+  if (!force && now - _lastPushTime < 500) {
+    _pendingValue = modalEditor.value;
+    if (_pushTimer) clearTimeout(_pushTimer);
+    _pushTimer = setTimeout(function(){
+      if (_pendingValue !== null) {
+        modalEditor._undoStack.push(_pendingValue);
+        if (modalEditor._undoStack.length > 50) modalEditor._undoStack.shift();
+        document.getElementById('undoBtn').disabled = modalEditor._undoStack.length <= 1;
+        _pendingValue = null;
+        _lastPushTime = Date.now();
+      }
+    }, 500);
+    return;
+  }
+  if (_pendingValue !== null) {
+    modalEditor._undoStack.push(_pendingValue);
+    _pendingValue = null;
+  }
+  modalEditor._undoStack.push(modalEditor.value);
+  if (modalEditor._undoStack.length > 50) modalEditor._undoStack.shift();
+  document.getElementById('undoBtn').disabled = modalEditor._undoStack.length <= 1;
+  _lastPushTime = now;
+}
+
+function resetUndoState(){
+  modalEditor._undoStack = [];
+  modalEditor._undoStack.push(modalEditor.value);
+  _lastPushTime = 0;
+  _pendingValue = null;
+  if (_pushTimer) { clearTimeout(_pushTimer); _pushTimer = null; }
+  document.getElementById('undoBtn').disabled = true;
+}
+
+modalEditor.addEventListener('input', function(){
+  if (!modalEditor._suppressUndo) pushModalUndo(false);
+});
+
+document.getElementById('editBtn').onclick = function(){
+  modalEditor.value = editor.value;
+  resetUndoState();
+  document.getElementById('editModal').classList.add('show');
+};
+
+document.getElementById('undoBtn').onclick = function(){
+  if (!modalEditor._undoStack || modalEditor._undoStack.length <= 1) return;
+  modalEditor._undoStack.pop();
+  modalEditor._suppressUndo = true;
+  modalEditor.value = modalEditor._undoStack[modalEditor._undoStack.length - 1] || '';
+  modalEditor._suppressUndo = false;
+  document.getElementById('undoBtn').disabled = modalEditor._undoStack.length <= 1;
+};
+
+function findInModal(start){
+  var f = document.getElementById('findText').value;
+  if (!f) { showToast('请输入查找内容', false); return -1; }
+  var text = modalEditor.value;
+  var i = text.indexOf(f, start);
+  if (i === -1 && start > 0) i = text.indexOf(f, 0);
+  if (i !== -1) {
+    modalEditor.focus();
+    modalEditor.setSelectionRange(i, i + f.length);
+    var linesBefore = text.substring(0, i).split('\n').length - 1;
+    modalEditor.scrollTop = Math.max(0, linesBefore * 20 - 100);
+  } else {
+    showToast('未找到', false);
+  }
+  return i;
+}
+document.getElementById('findBtn').onclick = function(){ findInModal(modalEditor.selectionEnd || 0); };
+document.getElementById('replaceOne').onclick = function(){
+  var f = document.getElementById('findText').value;
+  var r = document.getElementById('replaceText').value;
+  if (!f) { showToast('请输入查找内容', false); return; }
+  var sel = modalEditor.value.substring(modalEditor.selectionStart, modalEditor.selectionEnd);
+  if (sel === f) {
+    pushModalUndo(true);
+    var start = modalEditor.selectionStart;
+    modalEditor.setRangeText(r, start, start + f.length, 'end');
+    findInModal(start + r.length);
+  } else {
+    findInModal(modalEditor.selectionEnd || 0);
+  }
+};
+document.getElementById('replaceAll').onclick = function(){
+  var f = document.getElementById('findText').value;
+  var r = document.getElementById('replaceText').value;
+  if (!f) { showToast('请输入查找内容', false); return; }
+  var count = modalEditor.value.split(f).length - 1;
+  if (count === 0) { showToast('未找到匹配内容', false); return; }
+  showDialog('全部替换确认',
+    '<div style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px"><b>查找内容</b><pre style="white-space:pre-wrap;background:#f8f9fa;padding:6px;border-radius:4px;margin-top:4px;font-size:12px">' + escapeHtml(f) + '</pre></div>' +
+    '<div style="padding:8px 0;border-bottom:1px solid #eee;font-size:13px"><b>替换为</b><pre style="white-space:pre-wrap;background:#f8f9fa;padding:6px;border-radius:4px;margin-top:4px;font-size:12px">' + escapeHtml(r || '（空）') + '</pre></div>' +
+    '<div style="padding:8px 0;font-size:13px"><b>将替换</b> <span style="color:#dc3545;font-weight:600">' + count + '</span> 处</div>',
+    [
+      { text: '取消', className: 'btn-cancel' },
+      { text: '确认全部替换', className: 'btn-confirm', onClick: function(){
+          pushModalUndo(true);
+          modalEditor.value = modalEditor.value.split(f).join(r);
+          showToast('已替换 ' + count + ' 处', true);
+        }
+      }
+    ]
+  );
+};
+
+document.getElementById('editClose').onclick = function(){
+  document.getElementById('editModal').classList.remove('show');
+};
+
+document.getElementById('editSave').onclick = function(){
+  fetch('/api/worker-file', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ content: modalEditor.value })
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if (data.success) {
+      editor.value = modalEditor.value;
+      showToast('保存成功（格式：' + (data.scriptFormat || '') + '）', true);
+      setInfo('已保存，' + modalEditor.value.length + ' 字符', 'ok');
+      document.getElementById('editModal').classList.remove('show');
+    } else {
+      showToast('保存失败：' + data.error, false);
+    }
+  });
+};
+
+// ============ 上传进度弹窗 ============
+var _uploadProgressTimer = null;
+var _uploadProgressValue = 0;
+
+function showUploadProgress(title, text){
+  document.getElementById('uploadProgressTitle').textContent = title;
+  document.getElementById('uploadProgressText').textContent = text || '准备上传...';
+  document.getElementById('uploadProgressBar').style.width = '0%';
+  document.getElementById('uploadProgressBar').textContent = '0%';
+  document.getElementById('uploadProgressClose').disabled = true;
+  document.getElementById('uploadProgressDialog').classList.add('show');
+}
+
+function setUploadProgress(percent, text){
+  var bar = document.getElementById('uploadProgressBar');
+  bar.style.width = percent + '%';
+  bar.textContent = percent + '%';
+  if (text) document.getElementById('uploadProgressText').textContent = text;
+}
+
+function startFakeProgress(){
+  _uploadProgressValue = 0;
+  setUploadProgress(0, '准备上传...');
+  if (_uploadProgressTimer) clearInterval(_uploadProgressTimer);
+  _uploadProgressTimer = setInterval(function(){
+    if (_uploadProgressValue < 90){
+      _uploadProgressValue += Math.random() * 6 + 2;
+      if (_uploadProgressValue > 90) _uploadProgressValue = 90;
+      var stage = '上传中...';
+      if (_uploadProgressValue > 60) stage = '语法检查中...';
+      if (_uploadProgressValue > 80) stage = '保存中...';
+      setUploadProgress(Math.round(_uploadProgressValue), stage);
+    }
+  }, 200);
+}
+
+function stopFakeProgress(percent, text){
+  if (_uploadProgressTimer){
+    clearInterval(_uploadProgressTimer);
+    _uploadProgressTimer = null;
+  }
+  setUploadProgress(percent, text);
+  document.getElementById('uploadProgressClose').disabled = false;
+}
+
+document.getElementById('uploadProgressClose').onclick = function(){
+  document.getElementById('uploadProgressDialog').classList.remove('show');
+};
+
+async function doUploadWithProgress(file){
+  showUploadProgress('上传 worker.js', '准备上传...');
+  startFakeProgress();
+  try {
+    var fd = new FormData();
+    fd.append('file', file);
+    var res = await fetch('/api/upload-worker', { method: 'POST', body: fd });
+    var data = await res.json();
+    if (data.success){
+      stopFakeProgress(100, '✔ 上传完成');
+    } else {
+      stopFakeProgress(100, '✘ 上传失败');
+    }
+    // 稍等一下，让用户看到 100%
+    setTimeout(function(){
+      document.getElementById('uploadProgressDialog').classList.remove('show');
+      if (data.success){
+        var warnHtml = '';
+        if (data.warning) {
+          warnHtml = '<div style="margin-top:8px;padding:8px;background:#fff3cd;color:#856404;border-radius:6px;font-size:12px;white-space:pre-wrap;max-height:200px;overflow-y:auto">⚠ ' + escapeHtml(data.warning) + '</div>';
+        }
+        showDialog(data.warning ? '⚠ 上传成功（有警告）' : '✔ 上传成功',
+          '<div style="font-size:13px;line-height:1.8">' +
+          '<div><b>格式：</b>' + (data.scriptFormat || '未知') + '</div>' +
+          '<div><b>大小：</b>' + data.size + ' 字节（' + (data.size / 1024).toFixed(1) + ' KB）</div>' +
+          warnHtml +
+          '<div style="margin-top:8px;color:#155724">文件已保存到项目，可点「保存并部署」上线。</div>' +
+          '</div>',
+          [{ text: '确定', className: 'btn-confirm', onClick: loadFile }]
+        );
+      } else {
+        showDialog('✘ 上传失败',
+          '<pre style="font-size:12px;color:#721c24;background:#fff5f5;padding:10px;border-radius:6px;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;margin:0">' + escapeHtml(data.error || '未知错误') + '</pre>',
+          [{ text: '确定', className: 'btn-cancel' }]
+        );
+      }
+    }, 400);
+  } catch (e) {
+    stopFakeProgress(100, '✘ 网络错误');
+    setTimeout(function(){
+      document.getElementById('uploadProgressDialog').classList.remove('show');
+      showDialog('✘ 上传失败',
+        '<pre style="font-size:12px;color:#721c24;background:#fff5f5;padding:10px;border-radius:6px;white-space:pre-wrap;word-break:break-all">' + escapeHtml(e.message) + '</pre>',
+        [{ text: '确定', className: 'btn-cancel' }]
+      );
+    }, 400);
+  }
+}
+
+document.getElementById('uploadOpenBtn').onclick = function(){
+  document.getElementById('fileInput').click();
+};
+document.getElementById('fileInput').onchange = function(){
+  var file = this.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showToast('文件超过 5MB', false); this.value = ''; return; }
+  doUploadWithProgress(file).then(function(){
+    document.getElementById('fileInput').value = '';
+  });
+};
+
+function streamApi(path, doneCallback){
+  fetch(path, { method: 'POST' }).then(function(res){
+    if (res.status === 401) { location.href = '/'; return; }
+    var reader = res.body.getReader();
+    var dec = new TextDecoder();
+    var buf = '';
+    function read(){
+      reader.read().then(function(result){
+        if (result.done) {
+          closeProgressEnabled();
+          if (doneCallback) doneCallback();
+          return;
+        }
+        buf += dec.decode(result.value, { stream: true });
+        var parts = buf.split('\n\n');
+        buf = parts.pop();
+        parts.forEach(function(p){
+          if (!p.startsWith('data: ')) return;
+          try {
+            var d = JSON.parse(p.slice(6));
+            if (d.type === 'out' || d.type === 'err') appendProgress(d.text);
+            else if (d.type === 'done') {
+              if (d.code === 0) {
+                appendProgress('\n[✔ 完成，退出码 0]\n');
+              } else {
+                appendProgress('\n[✘ 失败，退出码 ' + d.code + ']\n');
+                appendProgress('错误原因：请查看上方红色 [ERR] 或 bash 提示。\n');
+                appendProgress('（退出码含义：1=通用错误，2=参数错，127=命令未找到，126=权限不足，130=被中断）\n');
+              }
+            }
+          } catch (e) {}
+        });
+        read();
+      });
+    }
+    read();
+  }).catch(function(e){
+    appendProgress('\n请求失败：' + e.message + '\n');
+    closeProgressEnabled();
+  });
+}
+
+document.getElementById('checkBtn').onclick = function(){
+  showProgress('语法检查');
+  streamApi('/api/check', function(){
+    appendProgress('\n检查完成。\n');
+  });
+};
+
+document.getElementById('deployBtn').onclick = function(){
+  if (document.getElementById('editModal').classList.contains('show')) {
+    fetch('/api/worker-file', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ content: modalEditor.value })
+    }).then(function(r){ return r.json(); }).then(function(data){
+      if (data.success) {
+        editor.value = modalEditor.value;
+        document.getElementById('editModal').classList.remove('show');
+      }
+      doDeploy();
+    });
+  } else {
+    doDeploy();
+  }
+};
+
+function doDeploy(){
+  showProgress('部署进度');
+  streamApi('/api/deploy', function(){
+    appendProgress('\n部署完成。\n');
+  });
+}
+
+document.getElementById('backupBtn').onclick = function(){
+  fetch('/api/worker-backup', { method: 'POST' }).then(function(r){ return r.json(); }).then(function(d){
+    if (d.success) {
+      showDialog('备份成功', '<p style="font-size:13px">已备份为：<br><b style="font-family:Menlo,monospace;font-size:12px;word-break:break-all">' + escapeHtml(d.name) + '</b></p>', [
+        { text: '确定', className: 'btn-confirm' }
+      ]);
+    } else {
+      showDialog('备份失败', '<p style="font-size:13px;color:#721c24">' + escapeHtml(d.error) + '</p>', [
+        { text: '确定', className: 'btn-cancel' }
+      ]);
+    }
+  });
+};
+
+document.getElementById('backupListBtn').onclick = function(){
+  loadBackupList();
+};
+
+function loadBackupList(){
+  fetch('/api/worker-backups').then(function(r){ return r.json(); }).then(function(d){
+    if (!d.success) {
+      showDialog('备份列表', '<p style="color:#721c24">加载失败</p>', [{ text: '关闭', className: 'btn-cancel' }]);
+      return;
+    }
+    var html = '<div style="max-height:60vh;overflow-y:auto">';
+    if (!d.backups.length) {
+      html += '<p style="font-size:13px;color:#6c757d">（暂无备份）</p>';
+    } else {
+      d.backups.forEach(function(b){
+        var time = new Date(b.time).toLocaleString();
+        html += '<div class="backup-item">' +
+          '<div class="backup-info">' + escapeHtml(b.name) + '<div class="backup-meta">' + b.size + ' 字节 · ' + time + '</div></div>' +
+          '<div class="backup-actions">' +
+          '<button class="btn-blue" onclick="viewBackup(\'' + escapeHtml(b.name) + '\')">查看</button>' +
+          '<button class="btn-green" onclick="restoreBackup(\'' + escapeHtml(b.name) + '\')">恢复</button>' +
+          '<button class="btn-blue" onclick="downloadBackup(\'' + escapeHtml(b.name) + '\')">下载</button>' +
+          '<button class="btn-red" onclick="deleteBackup(\'' + escapeHtml(b.name) + '\')">删除</button>' +
+          '</div></div>';
+      });
+    }
+    html += '</div>';
+    showDialog('备份列表（' + d.backups.length + '）', html, [
+      { text: '关闭', className: 'btn-cancel' }
+    ]);
+  });
+}
+
+function viewBackup(name){
+  fetch('/api/worker-backup-content', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name }) })
+    .then(function(r){ return r.json(); }).then(function(d){
+      if (!d.success) { showDialog('读取失败', '<p style="color:#721c24">' + escapeHtml(d.error) + '</p>', [{ text: '关闭', className: 'btn-cancel' }]); return; }
+      showDialog('备份：' + name, '<pre class="preview">' + escapeHtml(d.content) + '</pre>', [
+        { text: '关闭', className: 'btn-cancel' },
+        { text: '恢复此版本', className: 'btn-danger', onClick: function(){ restoreBackup(name); } }
+      ]);
+    });
+}
+
+function restoreBackup(name){
+  fetch('/api/worker-restore', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name }) })
+    .then(function(r){ return r.json(); }).then(function(d){
+      if (d.success) {
+        showDialog('恢复成功', '<p style="font-size:13px">已恢复到备份：<br><b style="font-family:Menlo,monospace;font-size:12px">' + escapeHtml(name) + '</b><br><br>请点「保存并部署」上传到 CF。</p>', [
+          { text: '确定', className: 'btn-confirm', onClick: loadFile }
+        ]);
+      } else {
+        showDialog('恢复失败', '<p style="color:#721c24">' + escapeHtml(d.error) + '</p>', [{ text: '关闭', className: 'btn-cancel' }]);
+      }
+    });
+}
+
+function downloadBackup(name){
+  fetch('/api/worker-backup-download', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name }) })
+    .then(function(r){ return r.blob(); }).then(function(blob){
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+}
+
+function deleteBackup(name){
+  if (!confirm('确认删除备份 ' + name + ' ？')) return;
+  fetch('/api/worker-backup-delete', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name }) })
+    .then(function(r){ return r.json(); }).then(function(d){
+      if (d.success) { loadBackupList(); }
+      else showDialog('删除失败', '<p style="color:#721c24">' + escapeHtml(d.error) + '</p>', [{ text: '关闭', className: 'btn-cancel' }]);
+    });
+}
+
+// ============ KV 绑定名替换 ============
+function detectKvNames(code){
+  // 匹配 env.XXX.get/put/delete/list/getWithMetadata(
+  const methods = ['get', 'put', 'delete', 'list', 'getWithMetadata'];
+  const regex = new RegExp('env\\.([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*\\.\\s*(' + methods.join('|') + ')\\s*\\(', 'g');
+  const result = {};
+  let m;
+  while ((m = regex.exec(code)) !== null) {
+    const name = m[1];
+    result[name] = (result[name] || 0) + 1;
+  }
+  return result;
+}
+
+document.getElementById('kvReplaceBtn').onclick = async function(){
+  let kvBinding = 'CONFIG_KV';
+  try {
+    const res = await fetch('/api/project-settings');
+    const data = await res.json();
+    if (data.success && data.project) kvBinding = data.project.kvBinding || 'CONFIG_KV';
+  } catch (e) {}
+
+  const sourceCode = document.getElementById('editModal').classList.contains('show') ? modalEditor.value : editor.value;
+  const names = detectKvNames(sourceCode);
+  const nameKeys = Object.keys(names);
+
+  if (nameKeys.length === 0) {
+    showDialog('KV 绑定名替换',
+      '<p style="font-size:14px;color:#6c757d">未在代码中检测到 KV 引用。</p>' +
+      '<p style="font-size:12px;color:#999;margin-top:8px">支持写法：env.XXX.get / env[\'XXX\'].get（KV 方法：get、put、delete、list、getWithMetadata）</p>',
+      [{ text: '确定', className: 'btn-cancel' }]
+    );
+    return;
+  }
+
+  const toReplace = {};
+  nameKeys.forEach(n => {
+    if (n !== kvBinding) toReplace[n] = names[n];
+  });
+
+  const toReplaceKeys = Object.keys(toReplace);
+  if (toReplaceKeys.length === 0) {
+    showDialog('KV 绑定名替换',
+      '<p style="font-size:14px;color:#155724">✔ 代码里的 KV 名已经是 <b>' + escapeHtml(kvBinding) + '</b>，无需替换。</p>',
+      [{ text: '确定', className: 'btn-confirm' }]
+    );
+    return;
+  }
+
+  let listHtml = '<p style="font-size:13px;margin-bottom:10px">当前项目 KV 绑定名：<b style="color:#28a745">' + escapeHtml(kvBinding) + '</b></p>';
+  listHtml += '<p style="font-size:13px;margin-bottom:8px">代码中检测到以下 KV 引用：</p>';
+  listHtml += '<div style="background:#f8f9fa;padding:10px;border-radius:6px;margin-bottom:14px;font-family:Menlo,monospace;font-size:12px">';
+  toReplaceKeys.forEach(n => {
+    listHtml += '<div style="padding:4px 0"><b style="color:#dc3545">' + escapeHtml(n) + '</b> <span style="color:#6c757d">（' + toReplace[n] + ' 处）</span></div>';
+  });
+  listHtml += '</div>';
+  listHtml += '<p style="font-size:13px;color:#495057">将全部替换为：<b style="color:#28a745">' + escapeHtml(kvBinding) + '</b></p>';
+
+  showDialog('KV 绑定名替换', listHtml, [
+    { text: '取消', className: 'btn-cancel' },
+    { text: '确认替换', className: 'btn-confirm', onClick: function(){
+        // 判断目标名是否合法标识符
+        const safe = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(kvBinding);
+        const methods = ['get', 'put', 'delete', 'list', 'getWithMetadata'];
+        // 匹配两种写法
+        const dotRe = new RegExp('env\.([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\.\s*(' + methods.join('|') + ')\s*\(', 'g');
+        const bracketRe = new RegExp("env\[\s*['\"]([^'\"]+)['\"]\s*\]\s*\.\s*(" + methods.join('|') + ')\s*\(', 'g');
+        let count = 0;
+        let newCode = sourceCode.replace(dotRe, function(match, name, method){
+          if (toReplaceKeys.indexOf(name) === -1) return match;
+          count++;
+          if (safe) return 'env.' + kvBinding + '.' + method + '(';
+          return "env['" + kvBinding + "']." + method + '(';
+        });
+        newCode = newCode.replace(bracketRe, function(match, name, method){
+          if (toReplaceKeys.indexOf(name) === -1) return match;
+          count++;
+          return "env['" + kvBinding + "']." + method + '(';
+        });
+        if (document.getElementById('editModal').classList.contains('show')) {
+          pushModalUndo(true);
+          modalEditor.value = newCode;
+        } else {
+          editor.value = newCode;
+        }
+        showToast('已替换 ' + count + ' 处 KV 引用为 ' + kvBinding, true);
+      }
+    }
+  ]);
+};
+
+// 导出 worker.js
+document.getElementById('exportBtn').onclick = async function(){
+  var content = document.getElementById('editModal').classList.contains('show') ? modalEditor.value : editor.value;
+  if (!content || !content.trim()) {
+    showToast('代码为空，无法导出', false);
+    return;
+  }
+  var projectName = 'worker';
+  try {
+    var res = await fetch('/api/project-settings');
+    var data = await res.json();
+    if (data.success && data.project && data.project.name) {
+      projectName = data.project.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+  } catch (e) {}
+  var fileName = projectName + '.js';
+  var blob = new Blob([content], { type: 'application/javascript;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('已导出 ' + fileName, true);
+};
+
+window.addEventListener('load', loadFile);
+</script>
+</body>
+</html>

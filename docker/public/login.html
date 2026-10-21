@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录 - CF 部署工具</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.box{background:white;padding:40px 30px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,0.2);width:100%;max-width:380px}
+h1{text-align:center;font-size:22px;color:#2c3e50;margin-bottom:8px}
+p.sub{text-align:center;color:#7f8c8d;font-size:13px;margin-bottom:24px}
+label{display:block;font-size:13px;color:#2c3e50;font-weight:600;margin-bottom:8px}
+input{width:100%;padding:14px 16px;border:2px solid #e9ecef;border-radius:8px;font-size:15px;background:#f8f9fa}
+input:focus{outline:none;border-color:#667eea;background:white}
+button{width:100%;padding:14px;margin-top:20px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+.error{color:#e74c3c;font-size:13px;text-align:center;margin-top:12px;display:none}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>CF Worker 部署工具</h1>
+  <p class="sub">请输入访问密码</p>
+  <form id="f">
+    <label for="pw">密码</label>
+    <input type="password" id="pw" required>
+    <button type="submit">登录</button>
+    <div class="error" id="err"></div>
+  </form>
+</div>
+<script>
+document.getElementById('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const pw = document.getElementById('pw').value;
+  const err = document.getElementById('err');
+  err.style.display = 'none';
+  const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+  const data = await res.json();
+  if (data.success) location.href = '/';
+  else { err.textContent = data.error || '登录失败'; err.style.display = 'block'; }
+});
+</script>
+</body>
+</html>

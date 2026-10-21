@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>项目设置 - CF 部署工具</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f5;color:#333;padding:15px;font-size:14px}
+header{background:linear-gradient(135deg,#17a2b8,#117a8b);color:white;padding:14px 16px;border-radius:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:17px}
+header a{color:white;text-decoration:none;background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:6px;font-size:12px}
+.card{background:white;padding:14px;border-radius:10px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+label{display:block;font-size:12px;color:#6c757d;margin-bottom:6px;margin-top:10px}
+input{width:100%;padding:10px 12px;border:1px solid #dee2e6;border-radius:6px;font-size:14px;background:#f8f9fa;margin-bottom:8px}
+input:focus{outline:none;border-color:#667eea;background:white}
+input:disabled{background:#e9ecef;color:#6c757d;cursor:not-allowed}
+button{padding:10px;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;color:white;width:100%;margin-top:8px}
+button:disabled{opacity:0.5;cursor:not-allowed}
+.btn-green{background:#28a745}
+.btn-blue{background:#17a2b8}
+.btn-red{background:#dc3545}
+.btn-small{width:auto;padding:4px 10px;font-size:12px;margin-top:0}
+.msg{padding:10px;border-radius:6px;font-size:13px;margin-top:10px;display:none;text-align:center}
+.msg-ok{background:#d4edda;color:#155724}
+.msg-err{background:#f8d7da;color:#721c24}
+.env-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.env-row input{margin-bottom:0;flex:1}
+.env-row label{display:flex;align-items:center;gap:4px;margin:0;white-space:nowrap}
+.env-row input[type=checkbox]{width:auto;margin:0}
+.domain-row{display:flex;justify-content:space-between;align-items:center;padding:8px;border:1px solid #dee2e6;border-radius:6px;margin-bottom:6px;background:#f8f9fa}
+.domain-name{font-size:13px;word-break:break-all}
+.domain-status{color:#28a745;font-size:11px;margin-left:6px}
+.empty{color:#6c757d;font-size:13px;text-align:center;padding:10px}
+.hint{font-size:11px;color:#6c757d;margin-top:-4px;margin-bottom:10px}
+/* 进度弹窗 */
+.dialog{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;padding:20px}
+.dialog-content{background:white;padding:20px;border-radius:12px;width:100%;max-width:600px;max-height:85vh;display:flex;flex-direction:column}
+pre.progress{background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:8px;font-size:12px;max-height:50vh;overflow-y:auto;white-space:pre-wrap;word-break:break-all;min-height:120px;margin:0;font-family:monospace}
+</style>
+</head>
+<body>
+<header>
+  <h1>项目设置</h1>
+  <a href="/">返回主页</a>
+</header>
+
+<div class="card">
+  <h3 style="font-size:14px;margin-bottom:10px;color:#495057">当前项目配置</h3>
+  <label>项目名（本地标识，可修改）</label>
+  <input id="name" placeholder="项目名">
+  <div class="hint">仅限字母、数字、下划线、连字符、中文</div>
+
+  <label>Worker 名称（不可改）</label>
+  <input id="workerName" disabled>
+
+  <label>KV 命名空间 ID</label>
+  <input id="kvId">
+
+  <label>KV 绑定变量名</label>
+  <input id="kvBinding">
+
+  <label>Worker 文件路径（容器内）</label>
+  <input id="workerFilePath">
+</div>
+
+<div class="card" id="envCard">
+  <h3 style="margin:0 0 8px 0;font-size:15px">环境变量 / 密钥</h3>
+  <div style="font-size:11px;color:#6c757d;margin-bottom:10px">部署时会写入 Cloudflare Worker 的 Variables and Secrets。</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+    <input id="envNameInput" placeholder="变量名" style="flex:1;min-width:100px">
+    <input id="envValueInput" placeholder="值" style="flex:2;min-width:120px">
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap"><input type="checkbox" id="envSecretInput" style="width:auto;margin:0"> 加密</label>
+    <button id="addEnvBtn" class="btn-green" style="width:auto;padding:8px 14px;margin:0">+ 添加</button>
+  </div>
+  <div id="envList" style="display:flex;flex-direction:column"></div>
+</div>
+
+<div class="card">
+  <h3 style="margin:0 0 8px 0;font-size:15px">自定义域名绑定</h3>
+  <div id="domainList"><div class="empty">加载中...</div></div>
+  <div style="display:flex;gap:6px;margin-top:10px">
+    <input id="newDomain" placeholder="例如 999.dwtxaqgb.eu.org" style="margin:0">
+    <button class="btn-blue" id="addDomainBtn" style="width:auto;margin:0;padding:10px 16px;white-space:nowrap">+ 添加</button>
+  </div>
+  <div class="hint">添加或删除后，需点击下方按钮统一同步到 CF。</div>
+</div>
+
+<div class="card" style="border:2px solid #28a745">
+  <h3 style="margin:0 0 8px 0;font-size:15px;color:#28a745">保存并部署</h3>
+  <div style="font-size:12px;color:#6c757d;margin-bottom:10px">将本地修改（改名、环境变量、域名）同步至 CF，并重新部署 Worker。</div>
+  <button class="btn-green" id="save">保存并部署</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<div class="card">
+  <h3>危险操作</h3>
+  <button class="btn-red" id="deleteBtn">删除当前项目</button>
+  <div class="hint">删除本地配置。如需同时删除 CF 上的 Worker 和 KV，会二次确认。</div>
+</div>
+
+<div class="dialog" id="saveProgressDialog">
+  <div class="dialog-content">
+    <h3 style="margin:0 0 12px 0;font-size:16px" id="saveProgressTitle">保存并部署</h3>
+    <pre class="progress" id="saveProgressOutput"></pre>
+    <button id="saveProgressClose" disabled style="margin-top:12px;background:#6c757d">处理中...</button>
+  </div>
+</div>
+
+<script>
+var projectName = '';
+var currentWorkerName = '';
+var envVarsCache = [];
+var domainsCache = [];
+var _saveDeployRunning = false;
+
+function escapeHtml(s){
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function showMsg(id, t, ok){
+  var m = document.getElementById(id);
+  m.textContent = t;
+  m.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
+  m.style.display = 'block';
+  setTimeout(function(){ m.style.display = 'none'; }, 4000);
+}
+
+// ===== 环境变量 UI =====
+function renderEnvList(){
+  var box = document.getElementById('envList');
+  box.innerHTML = '';
+  if (!envVarsCache.length) {
+    box.innerHTML = '<div class="empty" style="background:#f8f9fa;border-radius:6px">（暂无环境变量）</div>';
+    return;
+  }
+  envVarsCache.forEach(function(item, i){
+    var row = document.createElement('div');
+    row.className = 'env-row';
+    
+    var nameIn = document.createElement('input');
+    nameIn.value = item.name || '';
+    nameIn.placeholder = '变量名';
+    nameIn.oninput = function(){ envVarsCache[i].name = nameIn.value; };
+    
+    var valIn = document.createElement('input');
+    valIn.value = item.value || '';
+    var needRefill = item.secret && (!item.value || item.value === '');
+    valIn.placeholder = needRefill ? '加密值未知，请重填' : '值';
+    if (needRefill) { valIn.style.borderColor = '#dc3545'; valIn.style.background = '#fff5f5'; }
+    valIn.oninput = function(){ envVarsCache[i].value = valIn.value; };
+    
+    var secLab = document.createElement('label');
+    var secCb = document.createElement('input');
+    secCb.type = 'checkbox';
+    secCb.checked = !!item.secret;
+    secCb.onchange = function(){ envVarsCache[i].secret = secCb.checked; };
+    secLab.appendChild(secCb);
+    secLab.appendChild(document.createTextNode('加密'));
+    
+    var delBtn = document.createElement('button');
+    delBtn.textContent = '×';
+    delBtn.className = 'btn-red btn-small';
+    delBtn.onclick = function(){ envVarsCache.splice(i, 1); renderEnvList(); };
+
+    row.appendChild(nameIn); row.appendChild(valIn); row.appendChild(secLab); row.appendChild(delBtn);
+    box.appendChild(row);
+  });
+}
+
+document.getElementById('addEnvBtn').onclick = function(){
+  var nameIn = document.getElementById('envNameInput');
+  var valIn = document.getElementById('envValueInput');
+  var secIn = document.getElementById('envSecretInput');
+  var nm = nameIn.value.trim();
+  if (!nm) { alert('请先填变量名'); return; }
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(nm)) { alert('变量名不合法：需以字母或下划线开头'); return; }
+  if (nm === 'CONFIG_KV') { alert('CONFIG_KV 是保留名'); return; }
+  if (envVarsCache.find(function(x){ return x.name === nm; })) { alert('变量名已存在：' + nm); return; }
+  envVarsCache.push({ name: nm, value: valIn.value, secret: secIn.checked });
+  nameIn.value = ''; valIn.value = ''; secIn.checked = false; nameIn.focus();
+  renderEnvList();
+};
+
+// ===== 域名 UI =====
+function renderDomainList(){
+  var list = document.getElementById('domainList');
+  list.innerHTML = '';
+  var visible = domainsCache.filter(function(d){ return !d._del; });
+  if (!visible.length) {
+    list.innerHTML = '<div class="empty" style="background:#f8f9fa;border-radius:6px">暂无绑定的自定义域名</div>';
+    return;
+  }
+  visible.forEach(function(d){
+    var i = domainsCache.indexOf(d);
+    var row = document.createElement('div');
+    row.className = 'domain-row';
+    var status = d._new ? '<span style="color:#ffc107;font-size:11px;margin-left:8px">待绑定</span>' : (d.enabled ? '<span class="domain-status">✓ 已生效</span>' : '<span style="color:#ffc107;font-size:11px;margin-left:8px">⏳待生效</span>');
+    row.innerHTML = '<span class="domain-name">' + escapeHtml(d.hostname) + status + '</span>' +
+      '<button class="btn-red btn-small" data-i="' + i + '">×</button>';
+    row.querySelector('button').onclick = function(){
+      if (d._new) { domainsCache.splice(i, 1); }
+      else { d._del = true; }
+      renderDomainList();
+    };
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('addDomainBtn').onclick = function(){
+  var hostname = document.getElementById('newDomain').value.trim();
+  if (!hostname) { alert('请输入域名'); return; }
+  if (!/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(hostname)) { alert('域名格式不正确'); return; }
+  if (domainsCache.find(function(d){ return d.hostname === hostname && !d._del; })) { alert('域名已在列表中'); return; }
+  var del = domainsCache.find(function(d){ return d.hostname === hostname && d._del; });
+  if (del) { del._del = false; }
+  else { domainsCache.push({ hostname: hostname, enabled: false, _new: true, _del: false }); }
+  document.getElementById('newDomain').value = '';
+  renderDomainList();
+};
+
+async function loadDomains(){
+  var list = document.getElementById('domainList');
+  list.innerHTML = '<div class="empty">加载中...</div>';
+  try {
+    var res = await fetch('/api/domains/list');
+    if (res.status === 401) { location.href = '/'; return; }
+    var data = await res.json();
+    if (!data.success) { list.innerHTML = '<div class="empty">加载失败：' + escapeHtml(data.error || '') + '</div>'; return; }
+    domainsCache = (data.domains || []).map(function(d){ return { id: d.id, hostname: d.hostname, enabled: !!d.enabled, _new: false, _del: false }; });
+    renderDomainList();
+  } catch (e) {
+    list.innerHTML = '<div class="empty">请求失败：' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+// ===== 加载 =====
+async function load(){
+  var res = await fetch('/api/project-settings');
+  if (res.status === 401) { location.href = '/'; return; }
+  var data = await res.json();
+  var p = data.project || {};
+  projectName = p.name || '';
+  currentWorkerName = p.workerName || '';
+  document.getElementById('name').value = projectName;
+  ['workerName','kvId','kvBinding','workerFilePath'].forEach(function(k){
+    document.getElementById(k).value = p[k] || '';
+  });
+  envVarsCache = Array.isArray(p.envVars) ? p.envVars.map(function(v){ return { name: v.name || '', value: v.value || '', secret: !!v.secret }; }) : [];
+  renderEnvList();
+  loadDomains();
+}
+
+// ===== 保存并部署 =====
+function openSaveProgress(title){
+  document.getElementById('saveProgressTitle').textContent = title || '保存并部署';
+  document.getElementById('saveProgressOutput').textContent = '';
+  document.getElementById('saveProgressClose').disabled = true;
+  document.getElementById('saveProgressClose').textContent = '处理中...';
+  document.getElementById('saveProgressDialog').style.display = 'flex';
+}
+function appendSaveProgress(text){
+  var out = document.getElementById('saveProgressOutput');
+  out.textContent += text;
+  out.scrollTop = out.scrollHeight;
+}
+
+document.getElementById('saveProgressClose').onclick = function(){
+  document.getElementById('saveProgressDialog').style.display = 'none';
+  location.reload();
+};
+
+document.getElementById('save').onclick = async function(){
+  if (_saveDeployRunning) return;
+  _saveDeployRunning = true;
+  var btn = document.getElementById('save');
+  var origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '处理中...';
+
+  var body = {};
+  body.name = document.getElementById('name').value.trim();
+  ['kvId','kvBinding','workerFilePath'].forEach(function(k){
+    body[k] = document.getElementById(k).value;
+  });
+  body.envVars = envVarsCache.map(function(v){ return { name: v.name, value: v.value, secret: !!v.secret }; });
+  body.domains = domainsCache.filter(function(d){ return !d._del; }).map(function(d){ return d.hostname; });
+
+  openSaveProgress('保存并部署');
+
+  try {
+    var res = await fetch('/api/save-deploy', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (res.status === 401) { location.href = '/'; return; }
+    var reader = res.body.getReader();
+    var dec = new TextDecoder();
+    var buf = '';
+    while (true) {
+      var r = await reader.read();
+      if (r.done) break;
+      buf += dec.decode(r.value, { stream: true });
+      var parts = buf.split('\n\n');
+      buf = parts.pop();
+      for (var p of parts) {
+        if (!p.startsWith('data: ')) continue;
+        try {
+          var d = JSON.parse(p.slice(6));
+          if (d.type === 'out' || d.type === 'err') appendSaveProgress(d.text);
+          else if (d.type === 'done') {
+            appendSaveProgress(d.code === 0 ? '\n[✔ 完成]\n' : '\n[✘ 失败，退出码 ' + d.code + ']\n');
+            document.getElementById('saveProgressClose').disabled = false;
+            document.getElementById('saveProgressClose').textContent = '关闭';
+          }
+        } catch (e) {}
+      }
+    }
+  } catch (e) {
+    appendSaveProgress('\n请求失败：' + e.message + '\n');
+    document.getElementById('saveProgressClose').disabled = false;
+    document.getElementById('saveProgressClose').textContent = '关闭';
+  } finally {
+    _saveDeployRunning = false;
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+};
+
+// ===== 删除 =====
+document.getElementById('deleteBtn').onclick = async function(){
+  if (!projectName) { alert('未加载到项目名'); return; }
+  if (!confirm('确认删除项目 "' + projectName + '" 的本地配置？')) return;
+  var delRemote = confirm('是否同时删除 Cloudflare 上的 Worker 和 KV？\n\n【取消】= 只删本地 \n【确定】= 连 CF 资源一起删（不可恢复）');
+  var res = await fetch('/api/project/delete', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name: projectName, deleteRemote: delRemote })
+  });
+  var data = await res.json();
+  if (data.success) { alert('已删除'); location.href = '/'; }
+  else alert('删除失败：' + (data.error || ''));
+};
+
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+settings.json
+settings.json.*
+docker/settings.json
+import_cache*.json
+js/
+backup/
+logs/
+node_modules/
+*.bak
+*.bak.*

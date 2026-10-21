@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CF Worker 部署工具</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f5;color:#333;padding:15px;font-size:14px}
+header{background:linear-gradient(135deg,#007bff,#0056b3);color:white;padding:14px 16px;border-radius:12px;margin-bottom:16px}
+header h1{font-size:17px;font-weight:600;margin:0}
+.header-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px}
+.btn-settings{color:white;text-decoration:none;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);padding:5px 10px;border-radius:6px;font-size:12px;font-weight:500;white-space:nowrap}
+.btn-settings:hover{background:rgba(255,255,255,0.3)}
+.project-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.project-bar select{flex:1;min-width:160px;padding:8px 12px;border-radius:6px;border:none;font-size:14px;background:rgba(255,255,255,0.95);color:#333}
+.project-bar button{padding:8px 14px;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600}
+.btn-add{background:#28a745;color:white}
+.btn-logout{background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3)}
+.nav-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.nav-card{background:white;padding:16px 10px;border-radius:10px;text-decoration:none;color:#333;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:.2s;font-size:13px;font-weight:500}
+.nav-card:hover{background:#e9ecef;transform:translateY(-2px)}
+.nav-card .icon{font-size:24px;display:block;margin-bottom:6px}
+.actions{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
+.actions button{padding:18px 16px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;color:white;transition:.2s}
+.actions button:disabled{opacity:.5;cursor:not-allowed}
+.b1{background:linear-gradient(135deg,#17a2b8,#138496)}
+.b2{background:linear-gradient(135deg,#6c757d,#495057)}
+.card{background:white;padding:16px;border-radius:10px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+.card h2{font-size:15px;margin-bottom:12px;color:#495057;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.card h2 .title-left{display:flex;align-items:center;gap:8px}
+.card h2 .preview-url{font-size:12px;color:#6c757d;font-weight:400;word-break:break-all}
+.card h2 .preview-actions{display:flex;gap:6px}
+.card h2 .preview-actions button{padding:6px 10px;border:none;border-radius:6px;font-size:12px;cursor:pointer;background:#17a2b8;color:white}
+.card h2 .preview-actions button:hover{background:#138496}
+.stat-row{padding:8px 0;border-bottom:1px solid #eee;font-size:13px;word-break:break-all}
+.stat-row:last-child{border-bottom:none}
+.stat-row b{color:#495057;display:inline-block;min-width:100px}
+.test-result{padding:8px 12px;border-radius:6px;margin-bottom:6px;font-size:13px}
+.test-ok{background:#d4edda;color:#155724}
+.test-fail{background:#f8d7da;color:#721c24}
+.hint{font-size:12px;color:#6c757d;text-align:center;margin:12px 0}
+.preview-frame{width:100%;height:400px;border:1px solid #e9ecef;border-radius:8px;background:white}
+.preview-empty{padding:40px;text-align:center;color:#6c757d;font-size:13px;background:#f8f9fa;border-radius:8px}
+.dialog{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1100;align-items:center;justify-content:center;padding:20px}
+.dialog.show{display:flex}
+.dialog-content{background:white;padding:24px;border-radius:12px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto}
+.dialog-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.dialog-content h3{font-size:16px;margin:0;color:#333}
+.dialog-header .close-btn{background:#6c757d;color:white;border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}
+.dialog-header .close-btn:hover{background:#5a6268}
+</style>
+</head>
+<body>
+<header>
+  <div class="header-title">
+    <h1>CF Worker 部署工具</h1>
+    <a class="btn-settings" href="/settings.html">⚙️ 全局设置</a>
+  </div>
+  <div class="project-bar">
+    <select id="projectSelect"></select>
+    <button class="btn-add" id="newProjectBtn">+ 新建</button>
+    <button class="btn-logout" id="logout">退出</button>
+  </div>
+</header>
+
+<div class="nav-grid">
+  <a class="nav-card" href="/editor.html"><span class="icon">✏️</span>编辑器</a>
+  <a class="nav-card" href="/kv.html"><span class="icon">🗄️</span>KV 管理</a>
+  <a class="nav-card" href="/rollback.html"><span class="icon">↩️</span>回滚</a>
+  <a class="nav-card" href="/logs.html"><span class="icon">📋</span>日志</a>
+  <a class="nav-card" href="/import.html"><span class="icon">📥</span>从 CF 导入</a>
+  <a class="nav-card" href="/project-settings.html"><span class="icon">🔧</span>项目设置</a>
+</div>
+
+<div class="actions">
+  <button class="b1" id="status">查看状态</button>
+  <button class="b2" id="testBtn">测试核心接口</button>
+</div>
+
+<div class="card" id="previewCard">
+  <h2>
+    <span class="title-left">🔍 项目预览 <span class="preview-url" id="previewUrl"></span></span>
+    <span class="preview-actions">
+      <button id="previewRefresh">刷新</button>
+      <button id="previewNewTab">新标签</button>
+    </span>
+  </h2>
+  <div id="previewBody">
+    <div class="preview-empty">当前项目未配置公开域名</div>
+  </div>
+</div>
+
+<div class="hint">部署 / 语法检查请进入「编辑器」操作</div>
+
+<div class="dialog" id="resultDialog">
+  <div class="dialog-content">
+    <div class="dialog-header">
+      <h3 id="resultTitle">结果</h3>
+      <button class="close-btn" id="resultClose">关闭</button>
+    </div>
+    <div id="resultBody"></div>
+  </div>
+</div>
+
+<script>
+var projectSelect = document.getElementById('projectSelect');
+var previewUrl = document.getElementById('previewUrl');
+var previewBody = document.getElementById('previewBody');
+var currentPreviewBase = '';
+
+function showResultDialog(title, html){
+  document.getElementById('resultTitle').textContent = title;
+  document.getElementById('resultBody').innerHTML = html;
+  document.getElementById('resultDialog').classList.add('show');
+}
+
+document.getElementById('resultClose').onclick = function(){
+  document.getElementById('resultDialog').classList.remove('show');
+};
+
+async function loadProjects(){
+  var res = await fetch('/api/project/list');
+  if (res.status === 401) { location.href = '/'; return; }
+  var data = await res.json();
+  projectSelect.innerHTML = '';
+  var currentProj = null;
+  data.projects.forEach(function(p){
+    var opt = document.createElement('option');
+    opt.value = p.name;
+    opt.textContent = p.name + (p.workerName !== p.name ? ' (' + p.workerName + ')' : '');
+    if (p.name === data.current) {
+      opt.selected = true;
+      currentProj = p;
+    }
+    projectSelect.appendChild(opt);
+  });
+  if (!currentProj && data.projects.length > 0) {
+    currentProj = data.projects[0];
+    projectSelect.value = currentProj.name;
+  }
+  currentPreviewBase = '';
+  updatePreview();
+  if (currentProj) loadPreviewBase(currentProj);
+}
+
+async function loadPreviewBase(proj){
+  if (!proj || !proj.workerName) return;
+  try {
+    var r = await fetch('/api/domains/list?worker=' + encodeURIComponent(proj.workerName));
+    var d = await r.json();
+    if (d.success && d.domains && d.domains.length) {
+      var prod = d.domains.filter(function(x){ return x.environment === 'production'; });
+      var pick = prod[0] || d.domains[0];
+      currentPreviewBase = 'https://' + pick.hostname;
+    } else {
+      currentPreviewBase = '';
+    }
+  } catch (e) {
+    currentPreviewBase = '';
+  }
+  updatePreview();
+}
+
+function updatePreview(){
+  previewUrl.textContent = currentPreviewBase ? '(' + currentPreviewBase + ')' : '';
+  previewBody.innerHTML = currentPreviewBase
+    ? '<iframe class="preview-frame" src="' + currentPreviewBase + '?t=' + Date.now() + '" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>'
+    : '<div class="preview-empty">当前项目未配置公开域名</div>';
+}
+
+projectSelect.onchange = async function(){
+  await fetch('/api/project/switch', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: projectSelect.value }) });
+  location.reload();
+};
+
+document.getElementById('newProjectBtn').onclick = function(){ location.href = '/project-new.html'; };
+
+document.getElementById('status').onclick = async function(){
+  showResultDialog('状态信息', '加载中...');
+  var res = await fetch('/api/status');
+  if (res.status === 401) { location.href = '/'; return; }
+  var data = await res.json();
+  var html = '<h3 style="font-size:13px;margin:10px 0 6px">当前项目</h3>';
+  for (var k in (data.config || {})) {
+    var v = data.config[k];
+    if (k === 'apiToken') continue;
+    if (typeof v === 'object') continue;
+    html += '<div class="stat-row"><b>' + k + '</b> ' + (v || '') + '</div>';
+  }
+  if (data.fileInfo) {
+    html += '<h3 style="font-size:13px;margin:14px 0 6px">worker.js</h3>';
+    html += '<div class="stat-row"><b>路径</b> ' + data.fileInfo.path + '</div>';
+    html += '<div class="stat-row"><b>大小</b> ' + data.fileInfo.size + ' 字节</div>';
+  }
+  if (data.backups && data.backups.length) {
+    html += '<h3 style="font-size:13px;margin:14px 0 6px">备份（最近 10 个）</h3>';
+    data.backups.forEach(function(b){ html += '<div class="stat-row">' + b + '</div>'; });
+  }
+  document.getElementById('resultBody').innerHTML = html;
+};
+
+document.getElementById('testBtn').onclick = async function(){
+  showResultDialog('核心接口测试', '测试中...');
+  var res = await fetch('/api/test-endpoints', { method: 'POST' });
+  if (res.status === 401) { location.href = '/'; return; }
+  var data = await res.json();
+  if (!data.success) {
+    document.getElementById('resultBody').innerHTML = '失败：' + (data.error || '');
+    return;
+  }
+  var html = '';
+  data.tests.forEach(function(t){
+    html += '<div class="test-result ' + (t.ok ? 'test-ok' : 'test-fail') + '">' + t.name + ' → HTTP ' + t.status + '</div>';
+  });
+  document.getElementById('resultBody').innerHTML = html;
+};
+
+document.getElementById('previewRefresh').onclick = function(){
+  if (!currentPreviewBase) return;
+  updatePreview();
+};
+
+document.getElementById('previewNewTab').onclick = function(){
+  if (!currentPreviewBase) return;
+  window.open(currentPreviewBase, '_blank');
+};
+
+document.getElementById('logout').onclick = async function(){
+  await fetch('/api/logout', { method: 'POST' });
+  location.href = '/';
+};
+
+loadProjects();
+</script>
+</body>
+</html>

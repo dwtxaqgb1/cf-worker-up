@@ -1,0 +1,15 @@
+services:
+  cf-deployer:
+    build: .
+    container_name: cf-deployer
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-5100}:5004"
+    environment:
+      - PORT=5004
+      - WEB_PASSWORD=${WEB_PASSWORD:-admin123}
+    volumes:
+      - "../:/app/cf"
+      - "../js:/app/js"
+      - "./public:/app/public"
+      - "./server.js:/app/server.js"

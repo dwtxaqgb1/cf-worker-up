@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>全局设置 - CF 部署工具</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f5;color:#333;padding:15px;font-size:14px}
+header{background:linear-gradient(135deg,#007bff,#0056b3);color:white;padding:14px 16px;border-radius:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:17px}
+header a{color:white;text-decoration:none;background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:6px;font-size:12px}
+.card{background:white;padding:16px;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+.field-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+label{font-size:13px;font-weight:600;color:#2c3e50}
+.help-btn{width:24px;height:24px;border-radius:50%;background:#17a2b8;color:white;border:none;font-size:14px;cursor:pointer;font-weight:600;line-height:1;padding:0}
+.help-btn:hover{background:#138496}
+input{width:100%;padding:12px 14px;border:2px solid #e9ecef;border-radius:8px;font-size:14px;background:#f8f9fa;font-family:Menlo,monospace;margin-bottom:8px}
+input:focus{outline:none;border-color:#667eea;background:white}
+button.main-btn{padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;margin-top:6px}
+.btn-green{background:linear-gradient(135deg,#28a745,#1e7e34);color:white;width:100%;margin-bottom:10px}
+.btn-blue{background:linear-gradient(135deg,#17a2b8,#138496);color:white;width:100%}
+.msg{padding:12px;border-radius:8px;font-size:13px;margin-top:12px;display:none}
+.msg-ok{background:#d4edda;color:#155724}
+.msg-err{background:#f8d7da;color:#721c24}
+.hint{font-size:12px;color:#6c757d;margin-bottom:16px;line-height:1.6}
+.dialog{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1100;align-items:center;justify-content:center;padding:20px}
+.dialog.show{display:flex}
+.dialog-content{background:white;padding:24px;border-radius:12px;max-width:560px;width:100%;max-height:85vh;overflow-y:auto}
+.dialog-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.dialog-content h3{font-size:16px;margin:0;color:#333}
+.dialog-header .close-btn{background:#6c757d;color:white;border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}
+.dialog-body{font-size:13px;line-height:1.8;color:#333}
+.dialog-body ol{padding-left:20px;margin:8px 0}
+.dialog-body li{margin-bottom:6px}
+.dialog-body code{background:#f0f0f0;padding:2px 6px;border-radius:3px;font-family:Menlo,monospace;font-size:12px;color:#c7254e;word-break:break-all;white-space:normal;display:inline-block;max-width:100%}
+.dialog-body .step{background:#e3f2fd;border-left:3px solid #2196f3;padding:10px 12px;border-radius:4px;margin:10px 0;font-size:13px}
+.dialog-body .warn{background:#fff3cd;border-left:3px solid #ffc107;padding:10px 12px;border-radius:4px;margin:10px 0;font-size:13px}
+.dialog-body .link{color:#007bff;word-break:break-all}
+</style>
+</head>
+<body>
+<header>
+  <h1>全局设置</h1>
+  <a href="/">返回主页</a>
+</header>
+
+<div class="card">
+  <div class="field-header">
+    <label>Account ID</label>
+    <button class="help-btn" onclick="showHelp('accountId')">?</button>
+  </div>
+  <input id="accountId" placeholder="32 位十六进制">
+  <div class="hint">Cloudflare 控制台 → 右上角头像 → Account Home，右侧栏显示。</div>
+
+  <div class="field-header">
+    <label>API Token</label>
+    <button class="help-btn" onclick="showHelp('apiToken')">?</button>
+  </div>
+  <input id="apiToken" placeholder="cfut_ 开头，留空表示不修改">
+  <div class="hint">需要权限：Workers Scripts 编辑、KV 存储编辑、用户详细信息读取。</div>
+
+  <button class="main-btn btn-green" id="save">保存</button>
+  <button class="main-btn btn-blue" id="test">测试 Token</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<div class="dialog" id="helpDialog">
+  <div class="dialog-content">
+    <div class="dialog-header">
+      <h3 id="helpTitle">帮助</h3>
+      <button class="close-btn" id="helpClose">关闭</button>
+    </div>
+    <div class="dialog-body" id="helpBody"></div>
+  </div>
+</div>
+
+<div class="card" id="accountCard" style="margin-top:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="margin:0;font-size:15px">账号列表</h3>
+    <button id="addAccountBtn" style="padding:6px 12px;background:#28a745;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px">+ 新增账号</button>
+  </div>
+  <div id="accountList" style="display:flex;flex-direction:column;gap:8px"></div>
+</div>
+
+
+<script>
+function showMsg(t, ok){
+  var m = document.getElementById('msg');
+  m.textContent = t;
+  m.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
+  m.style.display = 'block';
+  setTimeout(function(){ m.style.display = 'none'; }, 4000);
+}
+
+function showHelp(type){
+  var title = '';
+  var body = '';
+  if (type === 'accountId') {
+    title = '如何获取 Account ID';
+    body = '<div class="step">' +
+      '<b>方法一（推荐，最快）：</b><br>' +
+      '1. 登录 Cloudflare：<span class="link">https://dash.cloudflare.com</span><br>' +
+      '2. 看浏览器地址栏，URL 是：<br>' +
+      '<code>https://dash.cloudflare.com/<b>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</b>/...</code><br>' +
+      '3. <b>dash.cloudflare.com/</b> 后面那一串 32 位字符，就是 Account ID<br>' +
+      '</div>' +
+      '<div class="step">' +
+      '<b>方法二：</b><br>' +
+      '1. 登录 Cloudflare<br>' +
+      '2. 点右上角头像 → <b>Account Home</b><br>' +
+      '3. 右侧栏会显示 <b>Account ID</b>，旁边有复制按钮<br>' +
+      '</div>' +
+      '<div class="step">' +
+      '<b>方法三：</b><br>' +
+      '1. 进入任意一个 Worker<br>' +
+      '2. 看右侧栏或 Settings，也会显示 Account ID<br>' +
+      '</div>' +
+      '<div class="warn">' +
+      '<b>注意</b>：Account ID 不是登录邮箱，也不是账户名，是一串 32 位十六进制字符。<br>' +
+      '例：<code>a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6</code>' +
+      '</div>';
+  } else if (type === 'apiToken') {
+    title = '如何创建 API Token';
+    body = '<div class="step">' +
+      '<b>步骤 1：创建 Token</b><br>' +
+      '1. 登录 Cloudflare<br>' +
+      '2. 右上角头像 → <b>My Profile</b>（我的个人资料）<br>' +
+      '3. 左侧菜单 → <b>API Tokens</b>（API 令牌）<br>' +
+      '4. 点 <b>Create Token</b>（创建令牌）<br>' +
+      '5. 选 <b>Edit Cloudflare Workers</b> 模板，或自定义' +
+      '</div>' +
+      '<div class="step">' +
+      '<b>步骤 2：配置权限</b><br>' +
+      '需要添加以下 3 项权限（在「权限」区点「+ 添加更多」逐条添加）：<br><br>' +
+      '<b>① 账户 → Workers 脚本 → 编辑</b><br>' +
+      '<span style="color:#6c757d;font-size:12px">Account → Workers Scripts → Edit</span><br><br>' +
+      '<b>② 账户 → Workers KV 存储 → 编辑</b><br>' +
+      '<span style="color:#6c757d;font-size:12px">Account → Workers KV Storage → Edit</span><br><br>' +
+      '<b>③ 用户 → 用户详细信息 → 读取</b><br>' +
+      '<span style="color:#6c757d;font-size:12px">User → User Details → Read</span><br>' +
+      '</div>' +
+      '<div class="step">' +
+      '<b>步骤 3：设置有效期</b><br>' +
+      '在「时间线」中选：<br>' +
+      '• 开始：现在<br>' +
+      '• 结束：<b>1 年后</b>（或选「永不过期」）<br>' +
+      '</div>' +
+      '<div class="step">' +
+      '<b>步骤 4：复制并粘贴</b><br>' +
+      '1. 点「创建令牌」<br>' +
+      '2. 页面显示 Token（<code>cfut_</code> 开头），<b>只显示一次</b><br>' +
+      '3. 立刻复制<br>' +
+      '4. 粘贴到本页的 API Token 输入框<br>' +
+      '5. 点「测试 Token」验证<br>' +
+      '6. 点「保存」' +
+      '</div>' +
+      '<div class="warn">' +
+      '<b>安全提示</b>：<br>' +
+      '• Token 只显示一次，关掉页面就看不到了<br>' +
+      '• 如果泄漏，立刻去 Cloudflare 删除该 Token<br>' +
+      '• 不同项目可以用同一个 Token' +
+      '</div>';
+  }
+  document.getElementById('helpTitle').textContent = title;
+  document.getElementById('helpBody').innerHTML = body;
+  document.getElementById('helpDialog').classList.add('show');
+}
+
+document.getElementById('helpClose').onclick = function(){
+  document.getElementById('helpDialog').classList.remove('show');
+};
+
+async function load(){
+  var res = await fetch('/api/global-settings');
+  if (res.status === 401) { location.href = '/'; return; }
+  var data = await res.json();
+  document.getElementById('accountId').value = data.accountId || '';
+  if (data.apiTokenMasked) {
+    document.getElementById('apiToken').placeholder = '已保存 ' + data.apiTokenMasked + '，留空不修改';
+  }
+}
+document.getElementById('save').onclick = async function(){
+  var body = {
+    accountId: document.getElementById('accountId').value.trim(),
+    apiToken: document.getElementById('apiToken').value.trim()
+  };
+  var res = await fetch('/api/global-settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  var data = await res.json();
+  if (data.success) {
+    showMsg('保存成功', true);
+    document.getElementById('apiToken').value = '';
+    load();
+  } else {
+    showMsg('保存失败：' + (data.error || ''), false);
+  }
+};
+document.getElementById('test').onclick = async function(){
+  var token = document.getElementById('apiToken').value.trim();
+  var res = await fetch('/api/test-token', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ token: token }) });
+  var data = await res.json();
+  if (data.success && data.result && data.result.status === 'active') {
+    showMsg('Token 有效，状态：' + data.result.status, true);
+  } else {
+    showMsg('Token 无效：' + (data.error || JSON.stringify(data.result)), false);
+  }
+};
+load();
+</script>
+<script>
+async function loadAccountList() {
+  var r = await fetch('/api/accounts/list');
+  var d = await r.json();
+  if (!d.success) return;
+  var box = document.getElementById('accountList');
+  box.innerHTML = '';
+  d.accounts.forEach(function(a) {
+    var cur = a.id === d.currentAccount;
+    var div = document.createElement('div');
+    div.style.cssText = 'display:flex;align-items:center;gap:6px;padding:8px;border-radius:6px;border:1px solid ' + (cur ? '#28a745' : '#dee2e6') + ';background:' + (cur ? '#e7f5ea' : '#f8f9fa');
+    var info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0';
+    var nameDiv = document.createElement('div');
+    nameDiv.style.cssText = 'font-weight:600';
+    nameDiv.textContent = a.name;
+    if (cur) { var b = document.createElement('span'); b.style.cssText = 'color:#28a745;font-size:11px'; b.textContent = ' [当前]'; nameDiv.appendChild(b); }
+    var meta = document.createElement('div');
+    meta.style.cssText = 'font-size:11px;color:#6c757d;word-break:break-all';
+    meta.textContent = (a.accountId||'').slice(0,20) + '... | ' + (a.apiTokenMasked||'');
+    info.appendChild(nameDiv); info.appendChild(meta);
+    div.appendChild(info);
+    [['switch','切换','#007bff'],['edit','编辑','#fd7e14'],['delete','删除','#dc3545']].forEach(function(cfg){
+      var btn = document.createElement('button');
+      btn.textContent = cfg[1];
+      btn.style.cssText = 'padding:4px 8px;border:none;border-radius:4px;background:' + cfg[2] + ';color:white;cursor:pointer;font-size:12px';
+      btn.onclick = function(){
+        if (cfg[0]==='switch') switchAccount(a.id);
+        else if (cfg[0]==='edit') editAccount(a.id);
+        else deleteAccount(a.id);
+      };
+      div.appendChild(btn);
+    });
+    box.appendChild(div);
+  });
+}
+async function switchAccount(id) {
+  var r = await fetch('/api/accounts/switch', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})});
+  var d = await r.json();
+  if (d.success) { alert('已切换到该账号，当前项目：' + (d.currentProject || '（无）')); location.reload(); }
+  else alert('切换失败：' + (d.error || '未知错误'));
+}
+async function editAccount(id) {
+  var r = await fetch('/api/accounts/list');
+  var d = await r.json();
+  var a = (d.accounts || []).find(function(x){return x.id===id});
+  if (!a) return;
+  var newName = prompt('账号名称：', a.name);
+  if (newName === null) return;
+  var newAccId = prompt('Account ID：', a.accountId);
+  if (newAccId === null) return;
+  var newToken = prompt('API Token（留空表示不改）：', '');
+  if (newToken === null) return;
+  var body = {id:id, name:newName, accountId:newAccId};
+  if (newToken) body.apiToken = newToken;
+  var r2 = await fetch('/api/accounts/update', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  var d2 = await r2.json();
+  if (d2.success) { alert('已更新'); loadAccountList(); }
+  else alert('更新失败：' + (d2.error || '未知错误'));
+}
+async function deleteAccount(id) {
+  if (!confirm('确认删除这个账号？该账号下不能有项目。')) return;
+  var r = await fetch('/api/accounts/delete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})});
+  var d = await r.json();
+  if (d.success) { alert('已删除'); location.reload(); }
+  else alert('删除失败：' + (d.error || '未知错误'));
+}
+document.getElementById('addAccountBtn').onclick = async function() {
+  var name = prompt('账号名称（可留空）：', '');
+  if (name === null) return;
+  var accountId = prompt('Account ID：', '');
+  if (!accountId) return;
+  var apiToken = prompt('API Token：', '');
+  if (!apiToken) return;
+  var r = await fetch('/api/accounts/add', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name||undefined,accountId:accountId,apiToken:apiToken})});
+  var d = await r.json();
+  if (d.success) { alert('已添加'); loadAccountList(); }
+  else alert('添加失败：' + (d.error || '未知错误'));
+};
+loadAccountList();
+</script>
+
+</body>
+</html>

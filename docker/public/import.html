@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>从 CF 导入 - CF 部署工具</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f5;color:#333;padding:15px;font-size:14px}
+header{background:linear-gradient(135deg,#6f42c1,#5a32a3);color:white;padding:14px 16px;border-radius:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:17px}
+header a{color:white;text-decoration:none;background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:6px;font-size:12px}
+.card{background:white;padding:16px;border-radius:10px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+h3{font-size:14px;margin-bottom:12px;color:#495057}
+.worker-row{padding:10px 12px;background:#f8f9fa;border-radius:6px;margin-bottom:8px;border:1px solid #e9ecef}
+.worker-row label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px}
+.worker-row input[type=checkbox]{width:18px;height:18px;flex-shrink:0}
+.worker-name{flex:1;font-family:Menlo,monospace;font-weight:600}
+.binding-area{margin-top:8px;font-size:12px;color:#495057}
+.binding-area.loading{color:#6c757d;font-style:italic}
+.kv-select{width:100%;padding:8px 10px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;margin-top:6px;background:white}
+.domain-area{margin-top:6px;font-size:12px;color:#0d47a1;background:#e3f2fd;padding:6px 8px;border-radius:4px}
+button{padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;width:100%;margin-top:6px}
+.btn-blue{background:linear-gradient(135deg,#17a2b8,#138496);color:white;margin-bottom:10px}
+.btn-purple{background:linear-gradient(135deg,#6f42c1,#5a32a3);color:white}
+button:disabled{opacity:.5;cursor:not-allowed}
+.msg{padding:12px;border-radius:8px;font-size:13px;margin-top:12px;display:none;word-break:break-all;white-space:pre-wrap}
+.msg-ok{background:#d4edda;color:#155724}
+.msg-err{background:#f8d7da;color:#721c24}
+.existing{color:#dc3545;font-size:11px;font-weight:600;margin-left:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>从 Cloudflare 导入项目</h1>
+  <a href="/">返回主页</a>
+</header>
+
+<div class="card">
+  <h3>步骤 1：加载 Worker 列表</h3>
+  <button class="btn-blue" id="loadBtn">🔄 刷新列表</button>
+  <div class="msg" id="msg1"></div>
+</div>
+
+<div class="card" id="workersCard" style="display:none">
+  <h3>步骤 2：勾选要导入的 Worker</h3>
+  <p style="font-size:12px;color:#6c757d;margin-bottom:10px">勾选后会自动查询该 Worker 的 KV 绑定。</p>
+  <div id="workersList"></div>
+</div>
+
+<div class="card" id="importCard" style="display:none">
+  <button class="btn-purple" id="importBtn">导入选中的 Worker</button>
+  <div class="msg" id="msg2"></div>
+</div>
+
+<script>
+let allKvs = [];
+let allWorkers = [];
+let existingProjects = [];
+let bindingsCache = {};
+
+function showMsg(id, t, cls){
+  var m = document.getElementById(id);
+  m.textContent = t;
+  m.className = 'msg ' + cls;
+  m.style.display = 'block';
+}
+
+// 页面加载时先读缓存
+async function loadCache(){
+  try {
+    var res = await fetch('/api/cf/cached-list');
+    var data = await res.json();
+    if (data.cached && data.workers){
+      allWorkers = data.workers;
+      allKvs = data.kvs;
+      existingProjects = data.existingProjects || [];
+      var time = new Date(data.cachedAt).toLocaleString();
+      showMsg('msg1', '已加载缓存（' + time + '）：' + allWorkers.length + ' 个 Worker，' + allKvs.length + ' 个 KV\n点「刷新」可重新拉取', 'msg-ok');
+      renderWorkers();
+      document.getElementById('workersCard').style.display = 'block';
+      document.getElementById('importCard').style.display = 'block';
+      document.getElementById('loadBtn').textContent = '🔄 刷新列表';
+    }
+  } catch (e) {}
+}
+
+document.getElementById('loadBtn').onclick = async function(){
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = '加载中...';
+  document.getElementById('msg1').style.display = 'none';
+  try {
+    var res = await fetch('/api/cf/quick-list');
+    var data = await res.json();
+    if (!data.success){
+      showMsg('msg1', '加载失败：' + (data.error || ''), 'msg-err');
+      return;
+    }
+    allWorkers = data.workers;
+    allKvs = data.kvs;
+    existingProjects = data.existingProjects || [];
+    showMsg('msg1', '加载成功：' + allWorkers.length + ' 个 Worker，' + allKvs.length + ' 个 KV', 'msg-ok');
+    renderWorkers();
+    document.getElementById('workersCard').style.display = 'block';
+    document.getElementById('importCard').style.display = 'block';
+  } catch (e) {
+    showMsg('msg1', '请求失败：' + e.message, 'msg-err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '一键加载';
+  }
+};
+
+function renderWorkers(){
+  var listDiv = document.getElementById('workersList');
+  listDiv.innerHTML = '';
+  allWorkers.forEach(function(w){
+    var exists = existingProjects.includes(w.name);
+    var div = document.createElement('div');
+    div.className = 'worker-row';
+    var domainHtml = '';
+    if (w.customDomains && w.customDomains.length > 0){
+      domainHtml = '<div class="domain-area">自定义域名：' + w.customDomains.join(', ') + '</div>';
+    }
+    div.innerHTML = '<label>' +
+      '<input type="checkbox" data-worker="' + w.name + '" ' + (exists ? 'disabled' : '') + '>' +
+      '<span class="worker-name">' + w.name + '</span>' +
+      (exists ? '<span class="existing">已存在</span>' : '') +
+      '</label>' +
+      '<div class="binding-area" id="binding_' + w.name.replace(/[^a-zA-Z0-9_-]/g, '_') + '"></div>' +
+      domainHtml;
+    listDiv.appendChild(div);
+
+    var cb = div.querySelector('input[type=checkbox]');
+    cb.addEventListener('change', function(){
+      if (this.checked) loadBinding(w.name);
+    });
+  });
+}
+
+async function loadBinding(workerName){
+  var safeId = 'binding_' + workerName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  var area = document.getElementById(safeId);
+  if (!area) return;
+  if (bindingsCache[workerName]){
+    renderBinding(workerName, area, bindingsCache[workerName]);
+    return;
+  }
+  area.className = 'binding-area loading';
+  area.textContent = '正在查询 KV 绑定...';
+  try {
+    var res = await fetch('/api/cf/worker-bindings?name=' + encodeURIComponent(workerName));
+    var data = await res.json();
+    if (data.success && data.bindings){
+      bindingsCache[workerName] = data.bindings;
+      renderBinding(workerName, area, data.bindings);
+    } else {
+      area.className = 'binding-area';
+      area.textContent = '查询失败：' + (data.error || '');
+    }
+  } catch (e){
+    area.className = 'binding-area';
+    area.textContent = '查询失败：' + e.message;
+  }
+}
+
+function renderBinding(workerName, area, bindings){
+  area.className = 'binding-area';
+  if (!bindings || bindings.length === 0){
+    area.innerHTML = '未检测到 KV 绑定<br>' +
+      '<select class="kv-select" data-kvid="' + workerName + '"><option value="">（不绑定）</option>' +
+      allKvs.map(function(k){ return '<option value="' + k.id + '">' + k.title + '</option>'; }).join('') +
+      '</select>' +
+      '<input type="hidden" data-binding="' + workerName + '" value="CONFIG_KV">';
+    return;
+  }
+  var b = bindings[0];
+  var kvTitle = '(未匹配)';
+  for (var i=0;i<allKvs.length;i++){
+    if (allKvs[i].id === b.namespaceId){ kvTitle = allKvs[i].title; break; }
+  }
+  area.innerHTML = '绑定名：<b>' + b.name + '</b> · KV：<b>' + kvTitle + '</b>' +
+    '<select class="kv-select" data-kvid="' + workerName + '"><option value="">（不绑定）</option>' +
+    allKvs.map(function(k){
+      return '<option value="' + k.id + '"' + (k.id === b.namespaceId ? ' selected' : '') + '>' + k.title + '</option>';
+    }).join('') +
+    '</select>' +
+    '<input type="hidden" data-binding="' + workerName + '" value="' + b.name + '">';
+}
+
+document.getElementById('importBtn').onclick = async function(){
+  var checks = document.querySelectorAll('input[type=checkbox][data-worker]:checked');
+  if (checks.length === 0){ showMsg('msg2', '请至少勾选一个 Worker', 'msg-err'); return; }
+  var items = [];
+  checks.forEach(function(c){
+    var workerName = c.dataset.worker;
+    var kvSel = document.querySelector('select[data-kvid="' + workerName + '"]');
+    var bindInput = document.querySelector('input[data-binding="' + workerName + '"]');
+    var w = allWorkers.filter(function(x){ return x.name === workerName; })[0];
+    var publicBase = (w && w.customDomains && w.customDomains.length > 0) ? 'https://' + w.customDomains[0] : '';
+    items.push({
+      workerName: workerName,
+      projectName: workerName,
+      kvId: kvSel ? kvSel.value : '',
+      kvBinding: bindInput ? bindInput.value : 'CONFIG_KV',
+      publicBase: publicBase
+    });
+  });
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = '导入中...';
+  try {
+    var res = await fetch('/api/cf/import', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ items: items })
+    });
+    var data = await res.json();
+    if (data.success){
+      var msg = '导入成功：' + data.imported.length + ' 个';
+      if (data.skipped.length > 0){
+        msg += '\n跳过：\n' + data.skipped.map(function(s){ return '  ' + s.workerName + ' - ' + s.reason; }).join('\n');
+      }
+      showMsg('msg2', msg, 'msg-ok');
+      setTimeout(function(){ location.href = '/'; }, 2500);
+    } else {
+      showMsg('msg2', '导入失败：' + (data.error || ''), 'msg-err');
+    }
+  } catch (e){
+    showMsg('msg2', '请求失败：' + e.message, 'msg-err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '导入选中的 Worker';
+  }
+};
+// 页面加载时自动读缓存
+loadCache();
+</script>
+</body>
+</html>

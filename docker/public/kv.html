@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KV 管理 - CF 部署工具</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f5;color:#333;padding:15px;font-size:14px}
+header{background:linear-gradient(135deg,#007bff,#0056b3);color:white;padding:14px 16px;border-radius:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:17px}
+header a{color:white;text-decoration:none;background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:6px;font-size:12px}
+.card{background:white;padding:14px;border-radius:10px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+button{padding:10px 14px;border:none;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;margin-bottom:8px}
+.btn-blue{background:#17a2b8;color:white}
+.btn-green{background:#28a745;color:white}
+.btn-red{background:#dc3545;color:white}
+.btn-yellow{background:#ffc107;color:#333}
+.key-item{padding:10px 12px;background:#f8f9fa;border-radius:6px;margin-bottom:6px;font-family:Menlo,monospace;font-size:12px;word-break:break-all;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.key-item:hover{background:#e9ecef}
+.key-name{flex:1;cursor:pointer}
+.key-actions{display:flex;gap:6px;flex-shrink:0}
+.key-actions button{padding:4px 8px;font-size:11px;margin:0}
+textarea{width:100%;min-height:200px;padding:10px;border:2px solid #e9ecef;border-radius:6px;font-family:Menlo,monospace;font-size:12px;background:#1e1e1e;color:#d4d4d4;resize:vertical}
+input{width:100%;padding:10px;border:2px solid #e9ecef;border-radius:6px;font-size:13px;margin-bottom:8px}
+.msg{padding:10px;border-radius:6px;font-size:13px;margin-top:8px;display:none}
+.msg-ok{background:#d4edda;color:#155724}
+.msg-err{background:#f8d7da;color:#721c24}
+</style>
+</head>
+<body>
+<header>
+  <h1>KV 管理</h1>
+  <a href="/">返回主页</a>
+</header>
+
+<div class="card">
+  <button class="btn-blue" id="reloadKeys">刷新 key 列表</button>
+  <div id="keys"></div>
+</div>
+
+<div class="card" id="editCard" style="display:none">
+  <h3 style="font-size:14px;margin-bottom:10px">编辑 <span id="editKey" style="color:#17a2b8;font-family:Menlo,monospace;font-size:12px"></span></h3>
+  <textarea id="valueBox"></textarea>
+  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn-green" id="saveValue">保存</button>
+    <button class="btn-blue" id="downloadValue">下载</button>
+    <button class="btn-red" id="deleteValue">删除</button>
+    <button class="btn-yellow" id="closeEdit">关闭</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3 style="font-size:14px;margin-bottom:10px">新建 key</h3>
+  <input id="newKey" placeholder="key">
+  <textarea id="newValue" placeholder="value"></textarea>
+  <button class="btn-green" id="createKey" style="margin-top:8px">创建</button>
+</div>
+
+<div class="msg" id="msg"></div>
+
+<script>
+var currentKey = '';
+
+function showMsg(t, ok){
+  var m = document.getElementById('msg');
+  m.textContent = t;
+  m.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
+  m.style.display = 'block';
+  setTimeout(function(){ m.style.display = 'none'; }, 3000);
+}
+
+function loadKeys(){
+  var keysDiv = document.getElementById('keys');
+  keysDiv.innerHTML = '加载中...';
+  fetch('/api/kv-list').then(function(r){ return r.json(); }).then(function(data){
+    if (!data.success) { keysDiv.innerHTML = '失败：' + (data.error || ''); return; }
+    keysDiv.innerHTML = '';
+    if (!data.keys.length) { keysDiv.innerHTML = '（无 key）'; return; }
+    data.keys.forEach(function(k){
+      var div = document.createElement('div');
+      div.className = 'key-item';
+      div.innerHTML = '<span class="key-name">' + k.name + '</span>' +
+        '<span class="key-actions">' +
+        '<button class="btn-blue" data-download="' + k.name + '">下载</button>' +
+        '<button class="btn-red" data-del="' + k.name + '">✕</button>' +
+        '</span>';
+      div.querySelector('.key-name').onclick = function(){ loadValue(k.name); };
+      div.querySelector('[data-download]').onclick = function(e){ e.stopPropagation(); downloadKey(k.name); };
+      div.querySelector('[data-del]').onclick = function(e){ e.stopPropagation(); deleteKey(k.name); };
+      keysDiv.appendChild(div);
+    });
+  }).catch(function(e){ keysDiv.innerHTML = '请求失败：' + e.message; });
+}
+
+function loadValue(key){
+  currentKey = key;
+  fetch('/api/kv-get', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ key: key })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (d.success) {
+      document.getElementById('editKey').textContent = key;
+      document.getElementById('valueBox').value = d.value;
+      document.getElementById('editCard').style.display = 'block';
+      document.getElementById('editCard').scrollIntoView({behavior:'smooth'});
+    } else {
+      showMsg('读取失败：' + d.error, false);
+    }
+  });
+}
+
+function downloadKey(key){
+  // 直接用浏览器下载，不经过 JS
+  var url = '/api/kv-download-get?key=' + encodeURIComponent(key);
+  window.location.href = url;
+  showMsg('已开始下载 ' + key, true);
+}
+
+function deleteKey(key){
+  if (!confirm('确认删除 key：' + key + ' ?')) return;
+  fetch('/api/kv-delete', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ key: key })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (d.success) { showMsg('已删除', true); loadKeys(); }
+    else showMsg('删除失败：' + d.error, false);
+  });
+}
+
+document.getElementById('reloadKeys').onclick = loadKeys;
+
+document.getElementById('saveValue').onclick = function(){
+  if (!currentKey) return;
+  fetch('/api/kv-put', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ key: currentKey, value: document.getElementById('valueBox').value })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (d.success) showMsg('保存成功', true);
+    else showMsg('保存失败：' + d.error, false);
+  });
+};
+
+document.getElementById('downloadValue').onclick = function(){
+  if (currentKey) downloadKey(currentKey);
+};
+
+document.getElementById('deleteValue').onclick = function(){
+  if (!currentKey) return;
+  if (!confirm('确认删除？')) return;
+  fetch('/api/kv-delete', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ key: currentKey })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (d.success) {
+      showMsg('已删除', true);
+      document.getElementById('editCard').style.display = 'none';
+      loadKeys();
+    } else showMsg('删除失败：' + d.error, false);
+  });
+};
+
+document.getElementById('closeEdit').onclick = function(){
+  document.getElementById('editCard').style.display = 'none';
+};
+
+document.getElementById('createKey').onclick = function(){
+  var key = document.getElementById('newKey').value.trim();
+  var value = document.getElementById('newValue').value;
+  if (!key) { showMsg('key 不能为空', false); return; }
+  fetch('/api/kv-put', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ key: key, value: value })
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if (d.success) {
+      showMsg('创建成功', true);
+      document.getElementById('newKey').value = '';
+      document.getElementById('newValue').value = '';
+      loadKeys();
+    } else showMsg('创建失败：' + d.error, false);
+  });
+};
+
+loadKeys();
+</script>
+</body>
+</html>
